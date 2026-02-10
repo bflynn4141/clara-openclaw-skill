@@ -1,0 +1,13 @@
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+
+# OpenClaw internals
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# OS
+.DS_Store
