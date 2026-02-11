@@ -50,6 +50,24 @@ Read/write `memory/heartbeat-state.json` to track:
 - Already-notified items (deduplication)
 - Pending action items
 
+### Expense Tracking (1x daily, evening block)
+Scan emails for spending receipts and log to Google Sheet.
+
+**Sources to scan:**
+- `from:doordash no-reply@doordash.com` — delivery receipts (extract restaurant, total, tip)
+- `from:uber receipts@uber.com` — rides and Uber Eats
+- `from:chime alerts@account.chime.com subject:"payment/transfer"` — Chime transfers (amounts are in HTML images, extract what you can)
+- `from:ally` — Ally Bank transactions/alerts
+
+**What to log (append to Google Sheet "Expense Tracker 2026"):**
+- Date, Merchant/Description, Amount, Category (Food Delivery, Transport, Transfer, Groceries, Other)
+- Spreadsheet ID: [pending — enable Sheets API]
+
+**Weekly summary (Sunday evening):**
+- Total spend by category
+- DoorDash/Uber count and total
+- iMessage Brian with a brief breakdown
+
 ## Not Yet Connected (add when available)
 - Weather (for outdoor meetings)
 - GitHub (PRs, issues on Clara/ERC8004)
