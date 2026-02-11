@@ -583,9 +583,33 @@ async function cmdBrowse(args) {
   output({ ok: true, bounties: filtered, total: filtered.length });
 }
 
+/** Decode common contract revert errors */
+function decodeRevertError(err) {
+  const msg = err.message || err.toString();
+  
+  // Known error signatures
+  const errorSignatures = {
+    '0xf924664d': 'InvalidStatus(currentStatus, requiredStatus) - Bounty not in Open state',
+    '0x4e487b71': 'Panic(uint256) - Internal contract panic',
+    '0x08c379a0': 'Error(string) - Generic revert with message',
+    'InsufficientAllowance': 'Insufficient token allowance for worker bond. Run with --approve-bond first',
+  };
+  
+  for (const [sig, desc] of Object.entries(errorSignatures)) {
+    if (msg.includes(sig)) return desc;
+  }
+  
+  // Check for common patterns
+  if (msg.includes('ERC20:')) return `ERC20 Error: ${msg.match(/ERC20:[^\n]+/)?.[0] || 'Token transfer failed'}`;
+  if (msg.includes('reverted')) return `Contract reverted: ${msg.match(/reverted[^\n]*/)?.[0] || 'Unknown reason'}`;
+  
+  return msg;
+}
+
 async function cmdClaim(args) {
   const session = requireSession();
   const bountyAddress = args.bounty || args._positional;
+  const skipApproval = args['skip-approval'] || false;
 
   if (!bountyAddress || !isAddress(bountyAddress)) {
     output({ ok: false, error: 'Required: --bounty 0xBountyAddress' });
@@ -600,27 +624,80 @@ async function cmdClaim(args) {
     return;
   }
 
+  // Pre-check: verify bounty is Open
+  try {
+    const status = await pub.readContract({
+      address: bountyAddress,
+      abi: bountyAbi,
+      functionName: 'status',
+    });
+    
+    if (status !== 0n) {
+      const statusName = BOUNTY_STATUS[Number(status)] || `Unknown(${status})`;
+      output({ 
+        ok: false, 
+        error: `Cannot claim: Bounty status is "${statusName}" (expected "Open"). Only Open bounties can be claimed.`,
+        status: Number(status),
+        statusName,
+      });
+      return;
+    }
+  } catch (statusErr) {
+    log(`Warning: Could not verify bounty status: ${statusErr.message}`);
+  }
+
+  // Optional: Handle worker bond approval
+  if (!skipApproval) {
+    try {
+      const token = await pub.readContract({ address: bountyAddress, abi: bountyAbi, functionName: 'token' });
+      const workerBond = await pub.readContract({ address: bountyAddress, abi: bountyAbi, functionName: 'workerBond' });
+      
+      if (workerBond > 0n) {
+        const tokenSym = tokenSymbolByAddress(token);
+        log(`Note: This bounty requires a worker bond of ${formatUnits(workerBond, TOKENS[tokenSym]?.decimals || 18)} ${tokenSym}`);
+        log(`If claim fails, run with --approve-bond to approve the bond first.`);
+      }
+    } catch {
+      // Non-critical, continue
+    }
+  }
+
   const wallet = getWalletClient(session);
 
   log(`Claiming bounty ${shortAddr(bountyAddress)} as agent #${agentId}...`);
-  const hash = await wallet.writeContract({
-    address: bountyAddress,
-    abi: bountyAbi,
-    functionName: 'claim',
-    args: [agentId],
-  });
+  
+  try {
+    const hash = await wallet.writeContract({
+      address: bountyAddress,
+      abi: bountyAbi,
+      functionName: 'claim',
+      args: [agentId],
+    });
 
-  log(`Tx: ${hash}`);
-  log('Waiting for confirmation...');
-  const receipt = await pub.waitForTransactionReceipt({ hash });
+    log(`Tx: ${hash}`);
+    log('Waiting for confirmation...');
+    const receipt = await pub.waitForTransactionReceipt({ hash });
 
-  output({
-    ok: true,
-    txHash: hash,
-    blockNumber: receipt.blockNumber.toString(),
-    bountyAddress,
-    agentId: agentId.toString(),
-  });
+    output({
+      ok: true,
+      txHash: hash,
+      blockNumber: receipt.blockNumber.toString(),
+      bountyAddress,
+      agentId: agentId.toString(),
+    });
+  } catch (err) {
+    const decoded = decodeRevertError(err);
+    output({
+      ok: false,
+      error: `Claim failed: ${decoded}`,
+      suggestion: decoded.includes('InvalidStatus') 
+        ? 'The bounty may have been claimed by someone else, or is no longer Open. Run "browse --all" to check current status.'
+        : decoded.includes('Allowance')
+        ? 'Run with --approve-bond flag to approve the worker bond first.'
+        : 'Check the bounty status and try again.',
+      rawError: err.message,
+    });
+  }
 }
 
 async function cmdSubmit(args) {
@@ -786,6 +863,68 @@ async function cmdCancel(args) {
   });
 }
 
+async function cmdApproveBond(args) {
+  const session = requireSession();
+  const bountyAddress = args.bounty || args._positional;
+  const amount = args.amount;
+
+  if (!bountyAddress || !isAddress(bountyAddress)) {
+    output({ ok: false, error: 'Required: --bounty 0xBountyAddress' });
+    return;
+  }
+
+  const pub = getPublicClient();
+  
+  // Get bounty details
+  let token, workerBond;
+  try {
+    token = await pub.readContract({ address: bountyAddress, abi: bountyAbi, functionName: 'token' });
+    workerBond = await pub.readContract({ address: bountyAddress, abi: bountyAbi, functionName: 'workerBond' });
+  } catch (err) {
+    output({ ok: false, error: `Failed to read bounty details: ${err.message}` });
+    return;
+  }
+
+  const tokenSym = tokenSymbolByAddress(token);
+  const tokenInfo = TOKENS[tokenSym] || { decimals: 18 };
+  
+  // Use provided amount or default to workerBond
+  const approveAmount = amount ? parseUnits(amount, tokenInfo.decimals) : workerBond;
+  
+  log(`Approving ${formatUnits(approveAmount, tokenInfo.decimals)} ${tokenSym} for worker bond on bounty ${shortAddr(bountyAddress)}...`);
+  
+  const wallet = getWalletClient(session);
+  
+  try {
+    const hash = await wallet.writeContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: 'approve',
+      args: [bountyAddress, approveAmount],
+    });
+
+    log(`Approve tx: ${hash}`);
+    log('Waiting for confirmation...');
+    const receipt = await pub.waitForTransactionReceipt({ hash });
+
+    output({
+      ok: true,
+      txHash: hash,
+      blockNumber: receipt.blockNumber.toString(),
+      bountyAddress,
+      token: tokenSym,
+      amount: formatUnits(approveAmount, tokenInfo.decimals),
+      note: 'You can now claim this bounty with --skip-approval',
+    });
+  } catch (err) {
+    output({
+      ok: false,
+      error: `Approval failed: ${decodeRevertError(err)}`,
+      rawError: err.message,
+    });
+  }
+}
+
 async function cmdPost(args) {
   const session = requireSession();
   const { amount, token: tokenSymbol, deadline, task, skills } = args;
@@ -939,6 +1078,7 @@ const COMMANDS = {
   cancel: cmdCancel,
   post: cmdPost,
   profile: cmdProfile,
+  'approve-bond': cmdApproveBond,
 };
 
 const [command, ...rest] = process.argv.slice(2);
@@ -953,7 +1093,8 @@ Commands:
   status                                   Check wallet and agent status
   register  --name <n> --skills <s> [--bio <b>]  Register as agent
   browse    [--skill <s>] [--min <n>] [--max <n>] [--days <n>] [--all]
-  claim     --bounty <addr>                Claim a bounty
+  claim     --bounty <addr> [--skip-approval]  Claim a bounty
+  approve-bond --bounty <addr> [--amount <n>]  Approve worker bond before claiming
   submit    --bounty <addr> --proof <text> Submit work
   approve   --bounty <addr> [--rating 1-5] [--comment <text>]
   reject    --bounty <addr>                Reject submitted work
