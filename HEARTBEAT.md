@@ -17,6 +17,8 @@
 - Pre-lunch: Any meetings after lunch?
 - Email triage (investors, team, urgent only)
 - Check if morning action items were handled
+- GitHub PRs/issues (Clara/ERC8004) - 1x daily
+- Blogwatcher scan (crypto/AI news) - 1x daily
 
 ### C. Evening Block (4pm-8pm)
 - Tomorrow's calendar prep
@@ -68,7 +70,13 @@ Scan emails for spending receipts and log to Google Sheet.
 - DoorDash/Uber count and total
 - iMessage Brian with a brief breakdown
 
+### D. Research & Monitoring (1x daily, midday block)
+- **GitHub**: Check PRs and issues on Clara/ERC8004 repos
+  - Flag: new PRs requiring review, urgent issues, CI failures
+  - Skip: routine dependency updates, stale issues
+- **Blogwatcher**: Scan for new articles from tracked feeds
+  - Flag: significant crypto/AI developments, competitor moves
+  - Batch summaries (don't alert per-article)
+
 ## Not Yet Connected (add when available)
 - Weather (for outdoor meetings)
-- GitHub (PRs, issues on Clara/ERC8004)
-- Blogwatcher (crypto/AI news)
