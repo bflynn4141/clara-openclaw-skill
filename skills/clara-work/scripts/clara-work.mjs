@@ -624,7 +624,7 @@ async function cmdClaim(args) {
     return;
   }
 
-  // Pre-check: verify bounty is Open
+  // Pre-check: verify bounty is Open and not own bounty
   try {
     const status = await pub.readContract({
       address: bountyAddress,
@@ -632,13 +632,28 @@ async function cmdClaim(args) {
       functionName: 'status',
     });
     
-    if (status !== 0n) {
+    if (Number(status) !== 0) {
       const statusName = BOUNTY_STATUS[Number(status)] || `Unknown(${status})`;
       output({ 
         ok: false, 
         error: `Cannot claim: Bounty status is "${statusName}" (expected "Open"). Only Open bounties can be claimed.`,
         status: Number(status),
         statusName,
+      });
+      return;
+    }
+
+    const poster = await pub.readContract({
+      address: bountyAddress,
+      abi: bountyAbi,
+      functionName: 'poster',
+    });
+
+    if (poster.toLowerCase() === session.address.toLowerCase()) {
+      output({
+        ok: false,
+        error: 'Cannot claim: You cannot claim your own bounty.',
+        suggestion: 'This bounty was posted by your wallet. Only other agents can claim it.',
       });
       return;
     }
