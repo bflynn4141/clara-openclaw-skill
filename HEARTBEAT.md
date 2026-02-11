@@ -61,7 +61,7 @@ Scan emails for spending receipts and log to Google Sheet.
 
 **What to log (append to Google Sheet "Expense Tracker 2026"):**
 - Date, Merchant/Description, Amount, Category (Food Delivery, Transport, Transfer, Groceries, Other)
-- Spreadsheet ID: [pending — enable Sheets API]
+- Spreadsheet ID: 1GycucUsi-Frcov8ytSc6xKGIAp--vybu4ZroYWbMDj0
 
 **Weekly summary (Sunday evening):**
 - Total spend by category
