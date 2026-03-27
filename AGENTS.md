@@ -8,14 +8,9 @@ If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out w
 
 ## Every Session
 
-Before doing anything else:
+SOUL.md, USER.md, and MEMORY.md are **auto-loaded by OpenClaw** into your context at session start. Do NOT re-read them with the read tool — they're already there.
 
-1. Read `SOUL.md` — this is who you are
-2. Read `USER.md` — this is who you're helping
-3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
-4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
-
-Don't ask permission. Just do it.
+If you need recent daily context beyond what's in MEMORY.md, read `memory/YYYY-MM-DD.md` for today/yesterday. But only do this when it would actually help answer the current message — not as a ritual on every turn.
 
 ## Memory
 
@@ -206,6 +201,73 @@ Periodically (every few days), use a heartbeat to:
 Think of it like a human reviewing their journal and updating their mental model. Daily files are raw notes; MEMORY.md is curated wisdom.
 
 The goal: Be helpful without being annoying. Check in a few times a day, do useful background work, but respect quiet time.
+
+## 🌍 Newsworthy on World Chain
+
+Gia is an active curator on Newsworthy, a decentralized news curation protocol on World Chain.
+
+### Setup
+
+**Wallet & Registration**
+- Address: `0x41139C98E2345d6a33E5c1b37E973501976952dc` (OWS-managed)
+- World ID: Registered on AgentBook (`0xA23aB2712eA7BBa896930544C7d6636a96b944dA`)
+- Human ID: `15997369920377684602609137997843807630422155596404637688325159866776575424591`
+- Funding: 10 USDC + 0.0049 ETH on World Chain
+
+**Contracts**
+- FeedRegistry: `0xb2d538D2BD69a657A5240c446F0565a7F5d52BBF` (voting)
+- AgentBook: `0xA23aB2712eA7BBa896930544C7d6636a96b944dA` (identity)
+- USDC: `0x79A02482A880bCE3F13e09Da970dC34db4CD24d1`
+
+### Heartbeat Loop
+
+**Frequency**: Every 1 hour (3600000 ms)
+
+**Flow**:
+1. Fetch pending items from `https://api.newsworthycli.com/public/pending`
+2. Score each item using LLM (llama3.2:3b locally)
+3. Vote on-chain (KEEP if score ≥60, REMOVE if <60)
+4. Wait 1 hour, repeat
+
+**Important Fix**: Always check `hasVotedByHuman(itemId, humanId)` before voting
+- Prevents gas waste on duplicate votes
+- Skips items already voted on
+- Error `0x7c9a1cf9` = "already voted" (expected when skipping)
+
+### Scoring Rubric
+
+Each item (tweet) scored on 5 criteria (0-20 per criterion, 0-100 total):
+
+1. **Novelty** (0-20): Is this new information or a rehash?
+2. **Verifiability** (0-20): On-chain tx, primary source, or hearsay?
+3. **Impact** (0-20): Affects protocols, users, or markets materially?
+4. **Signal:Noise** (0-20): Real news or engagement farming?
+5. **Source Quality** (0-20): Primary source or secondhand?
+
+**Decision Threshold**:
+- Score ≥60 → Vote KEEP
+- Score <60 → Vote REMOVE
+
+### Voting Details
+
+- **Bond**: 1 USDC per submission (not applicable for curator votes)
+- **Vote Cost**: 0.05 USDC per vote
+- **Voting Period**: 4 hours (14400 seconds)
+- **Min Votes to Resolve**: 3
+- **NEWS Reward**: 100 NEWS tokens per resolved item (split among voters on winning side)
+
+### Current Status
+
+**Active**: Voting on new items as they arrive
+**Votes Cast**: Item #52 (REMOVE), Item #53 (KEEP)
+**Monitoring**: `/tmp/gia-heartbeat.log`
+
+**Next Steps**:
+- Continue voting hourly
+- Earn NEWS tokens from successful votes
+- Stake NEWS in NewsStaking for x402 API revenue
+
+---
 
 ## Make It Yours
 
