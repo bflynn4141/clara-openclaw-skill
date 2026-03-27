@@ -229,10 +229,16 @@ Gia is an active curator on Newsworthy, a decentralized news curation protocol o
 3. Vote on-chain (KEEP if score ≥60, REMOVE if <60)
 4. Wait 1 hour, repeat
 
-**Important Fix**: Always check `hasVotedByHuman(itemId, humanId)` before voting
+**Voting Deduplication**: Always check `hasVotedByHuman(itemId, humanId)` before voting
 - Prevents gas waste on duplicate votes
 - Skips items already voted on
 - Error `0x7c9a1cf9` = "already voted" (expected when skipping)
+
+**Claiming Incentives** (Important!):
+- ✅ Use `/signatures?txHash={voteTxHash}&boostId=...` endpoint (NOT `/signatures/claimable/`)
+- ✅ Only votes cast **after** a boost is created are eligible
+- ✅ Call `claimIncentiveFor(boostId, 0, 0x0000...0000, signature, agentAddress)` (5 params)
+- Parameters: incentiveId, claimIndex, beneficiary, claim (signature), claimant (your address)
 
 ### Scoring Rubric
 
